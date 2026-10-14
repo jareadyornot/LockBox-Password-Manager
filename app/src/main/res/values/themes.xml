@@ -1,0 +1,9 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.LockBox" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Customize your theme here -->
+        <item name="colorPrimary">#90CAF9</item>
+        <item name="colorSecondary">#2A3B4D</item>
+        <item name="android:windowBackground">#121212</item>
+    </style>
+</resources>
