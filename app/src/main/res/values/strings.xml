@@ -1,3 +1,20 @@
 <resources>
     <string name="app_name">LockBox</string>
+    <string name="folder_configured">Folder configured</string>
+    <string name="backup_folder_selected">Backup folder selected successfully!</string>
+    <string name="select_storage_location">Please select a storage location first!</string>
+    <string name="no_database_found">No database found to backup.</string>
+    <string name="failed_create_backup_file">Failed to create backup file.</string>
+    <string name="backup_created">Encrypted backup created!</string>
+    <string name="backup_failed">Backup failed: %1$s</string>
+    <string name="restore_successful">Restore successful! Restarting app...</string>
+    <string name="restore_failed">Restore failed. (Wrong PIN or corrupted file)</string>
+    <string name="invalid_backup_entry">Invalid backup entry</string>
+
+    <!-- Add Credential -->
+    <string name="site_password_required">Site and Password are required</string>
+    <string name="session_expired">Session expired. Please log in again.</string>
+    <string name="credential_saved">Credential saved securely!</string>
+    <string name="save_failed">Save failed: %1$s</string>
+    <string name="strong_password_generated">Strong password generated</string>
 </resources>

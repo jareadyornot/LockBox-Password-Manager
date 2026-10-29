@@ -3,12 +3,15 @@ package com.example.lockbox;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
+import android.os.PersistableBundle;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.lockbox.data.CredentialEntity;
@@ -16,7 +19,17 @@ import com.example.lockbox.data.LockBoxDatabase;
 
 public class CredentialDetailActivity extends AppCompatActivity {
 
+    private static final String MASKED = "••••••••••••";
+
     private boolean isPasswordVisible = false;
+    private long credentialId = -1;
+    private String username = "";
+    private String password = "";
+
+    private TextView tvSite, tvUsername, tvPassword, tvNote;
+    private ImageView btnTogglePassword;
+    private CharSequence defaultNoteText;
+    private int defaultNoteColor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,67 +39,117 @@ public class CredentialDetailActivity extends AppCompatActivity {
         ImageView ivBack = findViewById(R.id.ivBack);
         ivBack.setOnClickListener(v -> finish());
 
-        TextView tvSite = findViewById(R.id.tvDetailSite);
-        TextView tvUsername = findViewById(R.id.tvDetailUsername);
-        TextView tvPassword = findViewById(R.id.tvDetailPassword);
-        TextView tvNote = findViewById(R.id.tvDetailNote);
+        tvSite = findViewById(R.id.tvDetailSite);
+        tvUsername = findViewById(R.id.tvDetailUsername);
+        tvPassword = findViewById(R.id.tvDetailPassword);
+        tvNote = findViewById(R.id.tvDetailNote);
+        defaultNoteText = tvNote.getText();
+        defaultNoteColor = tvNote.getCurrentTextColor();
 
         ImageView btnCopyUsername = findViewById(R.id.btnCopyUsername);
         ImageView btnCopyPassword = findViewById(R.id.btnCopyPassword);
-        ImageView btnTogglePassword = findViewById(R.id.btnTogglePassword);
+        btnTogglePassword = findViewById(R.id.btnTogglePassword);
         Button btnDelete = findViewById(R.id.btnDeleteCredential);
         Button btnEdit = findViewById(R.id.btnEditCredential);
 
-        // Get data passed from adapter
-        String site = getIntent().getStringExtra("site");
-        String username = getIntent().getStringExtra("username");
-        String password = getIntent().getStringExtra("password");
-        String note = getIntent().getStringExtra("note");
-        long credentialId = getIntent().getLongExtra("id", -1); // Fixed method name
+        // Only the id is passed in; the data is read from the encrypted database
+        credentialId = getIntent().getLongExtra("id", -1);
 
-        tvSite.setText(site);
-        tvUsername.setText(username);
-        if (note != null && !note.isEmpty()) {
-            tvNote.setText(note);
-            tvNote.setTextColor(android.graphics.Color.parseColor("#FFFFFF"));
-        }
+        tvPassword.setText(MASKED);
 
-        // Masked password display
-        String maskedPassword = "••••••••••••";
-        tvPassword.setText(maskedPassword);
-
-        // Toggle password visibility
         btnTogglePassword.setOnClickListener(v -> {
             isPasswordVisible = !isPasswordVisible;
             if (isPasswordVisible) {
                 tvPassword.setText(password);
-                btnTogglePassword.setImageResource(android.R.drawable.ic_menu_view); // Fixed namespace reference
+                btnTogglePassword.setImageResource(android.R.drawable.ic_menu_view);
             } else {
-                tvPassword.setText(maskedPassword);
+                tvPassword.setText(MASKED);
                 btnTogglePassword.setImageResource(R.drawable.ic_visibility_off);
             }
         });
 
-        // Copy Username
         btnCopyUsername.setOnClickListener(v -> {
-            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData clip = ClipData.newPlainText("Username", username);
-            clipboard.setPrimaryClip(clip);
+            copyToClipboard("Username", username, false);
             Toast.makeText(this, "Username copied to clipboard", Toast.LENGTH_SHORT).show();
         });
 
-        // Copy Password
         btnCopyPassword.setOnClickListener(v -> {
-            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData clip = ClipData.newPlainText("Password", password);
-            clipboard.setPrimaryClip(clip);
+            copyToClipboard("Password", password, true);
             Toast.makeText(this, "Password copied to clipboard", Toast.LENGTH_SHORT).show();
         });
 
-        // Delete Credential
-        btnDelete.setOnClickListener(v -> {
-            new Thread(() -> {
-                LockBoxDatabase db = LockBoxDatabase.getInstance(this, Session.getMasterPin());
+        btnDelete.setOnClickListener(v ->
+                new AlertDialog.Builder(this)
+                        .setTitle("Delete credential?")
+                        .setMessage("This cannot be undone.")
+                        .setPositiveButton("Delete", (d, w) -> deleteCredential())
+                        .setNegativeButton("Cancel", null)
+                        .show()
+        );
+
+        btnEdit.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AddCredentialActivity.class);
+            intent.putExtra("id", credentialId);
+            startActivity(intent);
+            overridePendingTransition(R.anim.slide_in_bottom, 0);
+        });
+    }
+
+    // Reload on every resume so edits made in AddCredentialActivity show up immediately
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (!Session.isActive()) {
+            Intent intent = new Intent(this, LoginActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            finish();
+            return;
+        }
+        loadCredential();
+    }
+
+    private void loadCredential() {
+        new Thread(() -> {
+            try {
+                CredentialEntity c = LockBoxDatabase.getInstance(this, Session.getDbKey())
+                        .credentialDao().getCredentialById(credentialId);
+                runOnUiThread(() -> {
+                    if (c == null) {
+                        finish();
+                        return;
+                    }
+                    bind(c);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Could not load credential", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void bind(CredentialEntity c) {
+        username = c.username == null ? "" : c.username;
+        password = c.encryptedPassword == null ? "" : c.encryptedPassword;
+
+        tvSite.setText(c.siteOrApp);
+        tvUsername.setText(username);
+        tvPassword.setText(isPasswordVisible ? password : MASKED);
+
+        if (c.note != null && !c.note.isEmpty()) {
+            tvNote.setText(c.note);
+            tvNote.setTextColor(android.graphics.Color.parseColor("#FFFFFF"));
+        } else {
+            tvNote.setText(defaultNoteText);
+            tvNote.setTextColor(defaultNoteColor);
+        }
+    }
+
+    private void deleteCredential() {
+        new Thread(() -> {
+            try {
+                LockBoxDatabase db = LockBoxDatabase.getInstance(this, Session.getDbKey());
                 CredentialEntity entity = new CredentialEntity();
                 entity.id = credentialId;
                 db.credentialDao().deleteCredential(entity);
@@ -95,11 +158,22 @@ public class CredentialDetailActivity extends AppCompatActivity {
                     Toast.makeText(this, "Credential deleted", Toast.LENGTH_SHORT).show();
                     finish();
                 });
-            }).start();
-        });
+            } catch (Exception e) {
+                runOnUiThread(() ->
+                        Toast.makeText(this, "Delete failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
 
-        btnEdit.setOnClickListener(v ->
-                Toast.makeText(this, "Edit feature coming up next!", Toast.LENGTH_SHORT).show()
-        );
+    private void copyToClipboard(String label, String text, boolean sensitive) {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText(label, text);
+        if (sensitive) {
+            // Asks Android to hide the copied value from clipboard previews
+            PersistableBundle extras = new PersistableBundle();
+            extras.putBoolean("android.content.extra.IS_SENSITIVE", true);
+            clip.getDescription().setExtras(extras);
+        }
+        clipboard.setPrimaryClip(clip);
     }
 }

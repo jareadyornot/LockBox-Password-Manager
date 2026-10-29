@@ -60,12 +60,18 @@
                 android:layout_marginBottom="4dp" />
 
             <TextView
+                android:id="@+id/tvStoragePath"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="/storage/emulated/0/LockBox"
                 android:textColor="#FFFFFF"
                 android:textSize="15sp"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingVertical="4dp"
+                android:paddingHorizontal="4dp" />
 
             <LinearLayout
                 android:layout_width="match_parent"

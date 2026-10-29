@@ -30,40 +30,56 @@ public class LoginActivity extends AppCompatActivity {
             }
 
             SharedPreferences prefs = getSharedPreferences("LockBoxPrefs", MODE_PRIVATE);
-            String savedPinHash = prefs.getString("master_pin_hash", "");
+            String savedVerifier = prefs.getString("master_pin_hash", "");
+            String pinSaltHex = prefs.getString("pin_salt", "");
+            String dbSaltHex = prefs.getString("db_salt", "");
 
-            String enteredPinHash = HashUtils.hashPin(enteredPin);
-
-            if (enteredPinHash.equals(savedPinHash)) {
-                new Thread(() -> {
-                    try {
-                        LockBoxDatabase.destroyInstance();
-
-                        // Initialize database with the hashed PIN
-                        LockBoxDatabase db = LockBoxDatabase.getInstance(this, enteredPinHash);
-
-                        // Force a safe open check instead of querying missing tables
-                        db.isOpen();
-
-                        // Save session
-                        Session.setMasterPin(enteredPinHash);
-
-                        runOnUiThread(() -> {
-                            startActivity(new Intent(LoginActivity.this, CredentialsActivity.class));
-                            finish();
-                        });
-
-                    } catch (Exception e) {
-                        runOnUiThread(() -> {
-                            Toast.makeText(this, "Decryption error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        });
-                    }
-                }).start();
-
-            } else {
-                Toast.makeText(this, "Incorrect PIN", Toast.LENGTH_SHORT).show();
-                etPin.setText("");
+            if (savedVerifier.isEmpty() || pinSaltHex.isEmpty() || dbSaltHex.isEmpty()) {
+                Toast.makeText(this, "Security data missing. Clear app data and set up LockBox again.",
+                        Toast.LENGTH_LONG).show();
+                return;
             }
+
+            btnUnlock.setEnabled(false);
+
+            new Thread(() -> {
+                try {
+                    String enteredVerifier = HashUtils.pbkdf2Hex(enteredPin, HashUtils.fromHex(pinSaltHex));
+
+                    if (!HashUtils.constantTimeEquals(enteredVerifier, savedVerifier)) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Incorrect PIN", Toast.LENGTH_SHORT).show();
+                            etPin.setText("");
+                            btnUnlock.setEnabled(true);
+                        });
+                        return;
+                    }
+
+                    String dbKey = HashUtils.pbkdf2Hex(enteredPin, HashUtils.fromHex(dbSaltHex));
+
+                    LockBoxDatabase.destroyInstance();
+                    LockBoxDatabase db = LockBoxDatabase.getInstance(this, dbKey);
+
+                    // isOpen() does not actually open the database. This does, so a wrong key
+                    // or corrupted file fails here instead of later on a random screen.
+                    db.getOpenHelper().getWritableDatabase();
+
+                    Session.start(enteredPin, dbKey);
+
+                    runOnUiThread(() -> {
+                        startActivity(new Intent(LoginActivity.this, CredentialsActivity.class));
+                        finish();
+                    });
+
+                } catch (Exception e) {
+                    LockBoxDatabase.destroyInstance();
+                    Session.clear();
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Could not unlock database: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        btnUnlock.setEnabled(true);
+                    });
+                }
+            }).start();
         });
     }
 }

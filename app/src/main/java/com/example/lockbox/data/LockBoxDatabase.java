@@ -9,6 +9,8 @@ import androidx.room.RoomDatabase;
 import net.sqlcipher.database.SQLiteDatabase;
 import net.sqlcipher.database.SupportFactory;
 
+import java.nio.charset.StandardCharsets;
+
 @Database(entities = {CredentialEntity.class}, version = 1, exportSchema = false)
 public abstract class LockBoxDatabase extends RoomDatabase {
 
@@ -20,12 +22,16 @@ public abstract class LockBoxDatabase extends RoomDatabase {
         if (INSTANCE == null) {
             SQLiteDatabase.loadLibs(context);
 
-            SupportFactory factory = new SupportFactory(passphrase.getBytes());
+            SupportFactory factory = new SupportFactory(passphrase.getBytes(StandardCharsets.UTF_8));
 
+            // No fallbackToDestructiveMigration(): in a password manager a schema change
+            // must never silently wipe the user's saved credentials.
             INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
                             LockBoxDatabase.class, "lockbox_secure.db")
                     .openHelperFactory(factory)
-                    .fallbackToDestructiveMigration()
+                    // No WAL file: every write goes straight into lockbox_secure.db,
+                    // so copying that single file for a backup is always complete.
+                    .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     .build();
         }
         return INSTANCE;

@@ -2,6 +2,7 @@ package com.example.lockbox;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -62,11 +63,12 @@ public class CredentialsActivity extends AppCompatActivity {
     }
 
     private void loadCredentials() {
-        String currentPin = Session.getMasterPin();
+        String currentPin = Session.getDbKey();
 
         // Guard check: If session pin is empty, force user back to login instead of crashing
         if (currentPin == null || currentPin.isEmpty()) {
             Intent intent = new Intent(CredentialsActivity.this, LoginActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
             finish();
             return;
@@ -86,6 +88,7 @@ public class CredentialsActivity extends AppCompatActivity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     swipeRefreshLayout.setRefreshing(false);
+                    Toast.makeText(this, "Could not load credentials: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();

@@ -40,10 +40,6 @@ public class CredentialAdapter extends RecyclerView.Adapter<CredentialAdapter.Cr
 
         holder.itemView.setOnClickListener(v -> {
             Intent intent = new Intent(v.getContext(), CredentialDetailActivity.class);
-            intent.putExtra("site", credential.siteOrApp);
-            intent.putExtra("username", credential.username);
-            intent.putExtra("password", credential.encryptedPassword);
-            intent.putExtra("note", credential.note);
             intent.putExtra("id", credential.id);
             v.getContext().startActivity(intent);
         });
